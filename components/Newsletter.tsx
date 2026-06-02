@@ -27,7 +27,7 @@ export function NewsletterForm({ compact = false }: { compact?: boolean }) {
   if (status === "done") {
     return (
       <p className="font-serif text-lede text-ink" role="status">
-        You're in. Look for the next dispatch — no noise in between.
+        You&rsquo;re in. Look for the next dispatch &mdash; no noise in between.
       </p>
     );
   }
