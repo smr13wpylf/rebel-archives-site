@@ -12,18 +12,18 @@ python3 -m http.server 8000
 # then visit http://localhost:8000
 ```
 
-It also works as-is on GitHub Pages (Settings → Pages → deploy from branch).
-
 ## Use it offline / install as an app
 
-The app is a PWA. When served over HTTPS (e.g. GitHub Pages) or localhost, a
-service worker caches the whole app on first visit, so it keeps working with
-no internet connection. Your browser will also offer **Install app** (address
-bar icon on desktop Chrome/Edge, "Add to Home Screen" on mobile), which gives
-it its own window and launcher icon like a native app.
+Opening `index.html` straight from a local folder works fully offline — the
+app has zero network dependencies.
 
-Opening `index.html` straight from a local folder works fully offline too —
-the service worker isn't needed in that case.
+The app is also a PWA: when served over HTTPS or localhost, a service worker
+caches the whole app on first visit, so it keeps working with no internet
+connection, and your browser will offer **Install app** (address bar icon on
+desktop Chrome/Edge, "Add to Home Screen" on mobile), which gives it its own
+window and launcher icon like a native app. If you ever make this repo
+public, it can be hosted on GitHub Pages as-is to get that experience from
+any device.
 
 Note that manuscripts are stored per browser *and* per origin: the installed
 GitHub Pages app and a local `file://` copy each have their own separate
