@@ -739,6 +739,11 @@
   // Default paragraph separator so plain typing produces <p> blocks.
   try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) { /* unsupported */ }
 
+  // Offline support: service workers need http(s); file:// already works offline.
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    navigator.serviceWorker.register('sw.js').catch(function () { /* offline install is best-effort */ });
+  }
+
   applyTheme();
   route();
 })();

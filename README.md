@@ -14,6 +14,21 @@ python3 -m http.server 8000
 
 It also works as-is on GitHub Pages (Settings → Pages → deploy from branch).
 
+## Use it offline / install as an app
+
+The app is a PWA. When served over HTTPS (e.g. GitHub Pages) or localhost, a
+service worker caches the whole app on first visit, so it keeps working with
+no internet connection. Your browser will also offer **Install app** (address
+bar icon on desktop Chrome/Edge, "Add to Home Screen" on mobile), which gives
+it its own window and launcher icon like a native app.
+
+Opening `index.html` straight from a local folder works fully offline too —
+the service worker isn't needed in that case.
+
+Note that manuscripts are stored per browser *and* per origin: the installed
+GitHub Pages app and a local `file://` copy each have their own separate
+library. Use **Backup all** / **Import backup** to move books between them.
+
 ## Features
 
 - **Library** — multiple books with colored spines, chapter/word counts, delete with confirm
