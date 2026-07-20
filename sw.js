@@ -1,7 +1,7 @@
 /* Rebel Archives — offline service worker.
    Cache-first for the app shell; bump CACHE_VERSION when files change. */
 
-var CACHE_VERSION = 'rebel-archives-v1';
+var CACHE_VERSION = 'rebel-archives-v2';
 
 var SHELL = [
   './',
