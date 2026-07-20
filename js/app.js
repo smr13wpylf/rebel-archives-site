@@ -122,12 +122,49 @@
 
   /* ---------------- Theme ---------------- */
 
+  var ACCENTS = [
+    { id: 'terracotta', dot: '#b3502d', label: 'Terracotta' },
+    { id: 'ink',        dot: '#35597a', label: 'Ink blue' },
+    { id: 'forest',     dot: '#3a6a4d', label: 'Forest green' },
+    { id: 'charcoal',   dot: '#4a463f', label: 'Charcoal' },
+    { id: 'plum',       dot: '#6b4470', label: 'Plum' }
+  ];
+
   function applyTheme() {
     var theme = db.settings.theme;
     if (!theme) {
       theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
     }
     document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.setAttribute('data-accent', db.settings.accent || 'terracotta');
+    renderAccentPickers();
+  }
+
+  function renderAccentPickers() {
+    var current = db.settings.accent || 'terracotta';
+    document.querySelectorAll('.accent-picker').forEach(function (picker) {
+      if (!picker.childElementCount) {
+        ACCENTS.forEach(function (a) {
+          var dot = document.createElement('button');
+          dot.className = 'accent-dot';
+          dot.dataset.accent = a.id;
+          dot.title = a.label + ' accent';
+          dot.setAttribute('role', 'radio');
+          dot.style.setProperty('--dot', a.dot);
+          dot.addEventListener('click', function () {
+            db.settings.accent = a.id;
+            persist();
+            applyTheme();
+          });
+          picker.appendChild(dot);
+        });
+      }
+      picker.querySelectorAll('.accent-dot').forEach(function (dot) {
+        var active = dot.dataset.accent === current;
+        dot.classList.toggle('active', active);
+        dot.setAttribute('aria-checked', active ? 'true' : 'false');
+      });
+    });
   }
 
   function toggleTheme() {
