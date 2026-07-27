@@ -19,7 +19,7 @@
     <div class="library-header-inner">
       <h1 class="brand"><span class="brand-mark">✒️</span> Rebel Archives <span class="brand-sub">Writing Studio</span></h1>
       <div class="library-actions">
-        <button id="btn-import" class="btn btn-ghost" title="Import a backup file">Import backup</button>
+        <button id="btn-import" class="btn btn-ghost" title="Import a backup, or a Markdown / text / HTML file as a new book">Import</button>
         <button id="btn-backup" class="btn btn-ghost" title="Download all books as a JSON backup">Backup all</button>
         <div class="accent-picker" role="radiogroup" aria-label="Accent color"></div>
         <button id="btn-theme-lib" class="btn btn-icon" title="Toggle light/dark theme">◐</button>
@@ -30,7 +30,8 @@
     <p class="library-tagline">Your manuscripts, stored privately in this browser.</p>
     <div id="book-grid" class="book-grid"></div>
   </main>
-  <input type="file" id="import-file" accept="application/json" hidden>
+  <!-- No accept filter: iOS greys out .json files when one is set. -->
+  <input type="file" id="import-file" hidden>
 </div>
 
 <!-- ========== EDITOR VIEW ========== -->

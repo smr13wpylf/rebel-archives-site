@@ -806,30 +806,156 @@
 
   $('#btn-import').addEventListener('click', function () { $('#import-file').click(); });
 
+  /* Rebuild a book from whatever an imported file happens to contain: fields
+     may be missing, renamed, or of the wrong type. */
+  function sanitizeBook(raw, index) {
+    if (!raw || typeof raw !== 'object') return null;
+
+    var chapters = (Array.isArray(raw.chapters) ? raw.chapters : []).map(function (ch) {
+      if (typeof ch === 'string') return { id: uid(), title: '', content: ch };
+      if (!ch || typeof ch !== 'object') return null;
+      return {
+        id: uid(),
+        title: typeof ch.title === 'string' ? ch.title : '',
+        content: typeof ch.content === 'string' ? ch.content : ''
+      };
+    }).filter(Boolean);
+    if (!chapters.length) chapters.push(newChapter('Chapter 1'));
+
+    var book = {
+      id: uid(), // always fresh, so an import can never overwrite a current book
+      title: (typeof raw.title === 'string' && raw.title.trim()) ? raw.title : 'Untitled book',
+      author: typeof raw.author === 'string' ? raw.author : '',
+      spine: typeof raw.spine === 'string' ? raw.spine : SPINE_COLORS[(db.books.length + index) % SPINE_COLORS.length],
+      createdAt: Number(raw.createdAt) || Date.now(),
+      updatedAt: Number(raw.updatedAt) || Date.now(),
+      goalWords: Number(raw.goalWords) > 0 ? Number(raw.goalWords) : 500,
+      dailyProgress: (raw.dailyProgress && typeof raw.dailyProgress === 'object') ? raw.dailyProgress : {},
+      lastTotalWords: 0,
+      chapters: chapters
+    };
+    book.lastTotalWords = bookTotalWords(book);
+    return book;
+  }
+
+  /* Accept a full backup, a bare array of books, or a single book object. */
+  function booksFromJSON(data) {
+    var list = null;
+    if (Array.isArray(data)) list = data;
+    else if (data && Array.isArray(data.books)) list = data.books;
+    else if (data && Array.isArray(data.chapters)) list = [data];
+    if (!list) return null;
+    return list.map(sanitizeBook).filter(Boolean);
+  }
+
+  /* Turn a Markdown / plain-text document into a book, splitting chapters on
+     headings: "# Title" plus "## Chapter" means the H1 names the book. */
+  function bookFromText(text, fallbackTitle) {
+    var lines = text.replace(/^﻿/, '').replace(/\r\n?/g, '\n').split('\n');
+    var heads = [];
+    lines.forEach(function (line, i) {
+      var m = /^(#{1,2})\s+(.*\S)\s*$/.exec(line);
+      if (m) heads.push({ line: i, level: m[1].length, title: m[2] });
+    });
+
+    var bookTitle = fallbackTitle;
+    var splitLevel = 0;
+    if (heads.length) {
+      var hasH2 = heads.some(function (h) { return h.level === 2; });
+      if (heads[0].level === 1 && hasH2) {
+        bookTitle = heads[0].title;
+        splitLevel = 2;
+      } else {
+        splitLevel = heads[0].level;
+      }
+    }
+    var bounds = heads.filter(function (h) { return h.level === splitLevel; });
+
+    function chapterFrom(title, from, to) {
+      var body = lines.slice(from, to).join('\n').trim();
+      if (!body) return null;
+      var ch = newChapter(title);
+      ch.content = markdownToHtml(body);
+      return ch;
+    }
+
+    var chapters = [];
+    if (!bounds.length) {
+      chapters.push(chapterFrom(fallbackTitle, 0, lines.length) || newChapter(fallbackTitle));
+    } else {
+      var preambleFrom = (bookTitle !== fallbackTitle) ? heads[0].line + 1 : 0;
+      var opening = chapterFrom('Opening', preambleFrom, bounds[0].line);
+      if (opening) chapters.push(opening);
+      bounds.forEach(function (h, i) {
+        var end = (i + 1 < bounds.length) ? bounds[i + 1].line : lines.length;
+        chapters.push(chapterFrom(h.title, h.line + 1, end) || newChapter(h.title));
+      });
+    }
+
+    return sanitizeBook({ title: bookTitle, chapters: chapters }, 0);
+  }
+
   $('#import-file').addEventListener('change', function () {
     var file = this.files[0];
     this.value = '';
     if (!file) return;
     var reader = new FileReader();
-    reader.onload = function () {
-      try {
-        var data = JSON.parse(reader.result);
-        if (!data || !Array.isArray(data.books)) throw new Error('bad format');
-        var existing = {};
-        db.books.forEach(function (b) { existing[b.id] = true; });
-        var added = 0;
-        data.books.forEach(function (b) {
-          if (existing[b.id]) b.id = uid(); // never clobber a current book
-          db.books.push(b);
-          added++;
-        });
-        persist();
-        renderLibrary();
-        alert('Imported ' + added + ' book' + (added === 1 ? '' : 's') + '.');
-      } catch (e) {
-        alert('That file is not a valid Rebel Archives backup.');
-      }
+
+    reader.onerror = function () {
+      alert('Could not read "' + file.name + '". Try copying it into the Files app first, then import it from there.');
     };
+
+    reader.onload = function () {
+      var raw = String(reader.result || '').replace(/^﻿/, '');
+      var baseName = file.name.replace(/\.[^.]+$/, '') || 'Imported book';
+
+      if (!raw.trim()) {
+        alert('"' + file.name + '" is empty — there was nothing to import.');
+        return;
+      }
+
+      // A file meant to be a backup should report damage rather than be
+      // silently imported as prose.
+      var claimsJSON = /\.json$/i.test(file.name) || /^[\[{]/.test(raw.trim());
+
+      var books = null;
+      try {
+        books = booksFromJSON(JSON.parse(raw));
+        if (!books && claimsJSON) {
+          alert('"' + file.name + '" is valid JSON but contains no books.\n\n' +
+            'Make sure you picked the file created by "Backup all".');
+          return;
+        }
+      } catch (e) {
+        if (claimsJSON) {
+          alert('"' + file.name + '" looks like a backup but is damaged, so it could not be read ' +
+            '(' + e.message + ').\n\nIf the download was interrupted, make a fresh backup and try again.');
+          return;
+        }
+        books = null; // not JSON at all: fall through to the document importers
+      }
+
+      if (!books) {
+        // An HTML export round-trips through the Markdown converter.
+        var text = /<\s*(html|body|section|p|h[1-6]|div)\b/i.test(raw) ? htmlToMarkdown(raw) : raw;
+        var book = bookFromText(text, baseName);
+        books = book ? [book] : null;
+      }
+
+      if (!books || !books.length) {
+        alert('Could not find any writing in "' + file.name + '".\n\n' +
+          'To move books between devices, open the library on the device you wrote them on, ' +
+          'tap "Backup all", and import the .json file it downloads. ' +
+          'Markdown, text and HTML files can also be imported as a new book.');
+        return;
+      }
+
+      books.forEach(function (b) { db.books.push(b); });
+      persist();
+      renderLibrary();
+      alert('Imported ' + books.length + ' book' + (books.length === 1 ? '' : 's') + '.');
+    };
+
     reader.readAsText(file);
   });
 
