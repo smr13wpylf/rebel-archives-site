@@ -13,25 +13,111 @@
 
   /* ---------------- State ---------------- */
 
-  var db = load();
+  var db = blankDB();
   var currentBookId = null;
   var currentChapterId = null;
   var saveTimer = null;
   var dirty = false;
 
-  function load() {
+  /* ---------------- Storage ----------------
+     Manuscripts (and now cover art and inline images) live in IndexedDB:
+     localStorage caps out around 5 MB, and hitting that cap used to break
+     saving. localStorage is still read once, to migrate older libraries. */
+
+  var DB_NAME = 'rebelArchives';
+  var STORE = 'state';
+  var idb = null;
+  var storageFailed = false;
+  var writeChain = Promise.resolve();
+
+  function openIDB() {
+    return new Promise(function (resolve, reject) {
+      if (!window.indexedDB) { reject(new Error('IndexedDB unavailable')); return; }
+      var req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = function () {
+        if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE);
+      };
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error || new Error('IndexedDB blocked')); };
+    });
+  }
+
+  function idbGet(key) {
+    return new Promise(function (resolve, reject) {
+      var tx = idb.transaction(STORE, 'readonly');
+      var req = tx.objectStore(STORE).get(key);
+      req.onsuccess = function () { resolve(req.result); };
+      req.onerror = function () { reject(req.error); };
+    });
+  }
+
+  function idbPut(key, value) {
+    return new Promise(function (resolve, reject) {
+      var tx = idb.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(value, key);
+      tx.oncomplete = function () { resolve(); };
+      tx.onerror = function () { reject(tx.error); };
+      tx.onabort = function () { reject(tx.error || new Error('write aborted')); };
+    });
+  }
+
+  function blankDB() {
+    return { version: 1, settings: { theme: null }, books: [] };
+  }
+
+  function legacyLoad() {
     try {
       var raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
         var parsed = JSON.parse(raw);
         if (parsed && Array.isArray(parsed.books)) return parsed;
       }
-    } catch (e) { /* corrupted storage: start fresh */ }
-    return { version: 1, settings: { theme: null }, books: [] };
+    } catch (e) { /* corrupted or unavailable: start fresh */ }
+    return null;
   }
 
+  function load() {
+    return openIDB().then(function (conn) {
+      idb = conn;
+      return idbGet('db');
+    }).then(function (stored) {
+      if (stored && Array.isArray(stored.books)) return stored;
+      var legacy = legacyLoad();
+      if (legacy) {
+        // One-time migration; the old copy stays put as a safety net.
+        return idbPut('db', legacy).then(function () { return legacy; })
+          .catch(function () { return legacy; });
+      }
+      return blankDB();
+    }).catch(function () {
+      // No IndexedDB (private mode, locked-down browser): fall back to
+      // localStorage so the app still works, just with less room.
+      idb = null;
+      return legacyLoad() || blankDB();
+    });
+  }
+
+  function reportStorageFailure(err) {
+    if (storageFailed) return;
+    storageFailed = true;
+    setSaveStatus('Not saved', false, true);
+    alert('Your writing could not be saved to this device (' + (err && err.name ? err.name : 'storage error') + ').\n\n' +
+      'Nothing typed so far is lost — it is still open here. Use "Backup all" in the library ' +
+      'to download a copy right now, then reload the app.');
+  }
+
+  /* Writes are queued so a slow save can never overlap or clobber a newer one. */
   function persist() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(db));
+    var snapshot = JSON.parse(JSON.stringify(db));
+    writeChain = writeChain.then(function () {
+      if (idb) return idbPut('db', snapshot);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
+    }).then(function () {
+      if (storageFailed) { storageFailed = false; setSaveStatus('Saved'); }
+    }).catch(function (err) {
+      reportStorageFailure(err);
+    });
+    return writeChain;
   }
 
   function uid() {
@@ -122,49 +208,12 @@
 
   /* ---------------- Theme ---------------- */
 
-  var ACCENTS = [
-    { id: 'terracotta', dot: '#b3502d', label: 'Terracotta' },
-    { id: 'ink',        dot: '#35597a', label: 'Ink blue' },
-    { id: 'forest',     dot: '#3a6a4d', label: 'Forest green' },
-    { id: 'charcoal',   dot: '#4a463f', label: 'Charcoal' },
-    { id: 'plum',       dot: '#6b4470', label: 'Plum' }
-  ];
-
   function applyTheme() {
     var theme = db.settings.theme;
     if (!theme) {
       theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
     }
     document.documentElement.setAttribute('data-theme', theme);
-    document.documentElement.setAttribute('data-accent', db.settings.accent || 'terracotta');
-    renderAccentPickers();
-  }
-
-  function renderAccentPickers() {
-    var current = db.settings.accent || 'terracotta';
-    document.querySelectorAll('.accent-picker').forEach(function (picker) {
-      if (!picker.childElementCount) {
-        ACCENTS.forEach(function (a) {
-          var dot = document.createElement('button');
-          dot.className = 'accent-dot';
-          dot.dataset.accent = a.id;
-          dot.title = a.label + ' accent';
-          dot.setAttribute('role', 'radio');
-          dot.style.setProperty('--dot', a.dot);
-          dot.addEventListener('click', function () {
-            db.settings.accent = a.id;
-            persist();
-            applyTheme();
-          });
-          picker.appendChild(dot);
-        });
-      }
-      picker.querySelectorAll('.accent-dot').forEach(function (dot) {
-        var active = dot.dataset.accent === current;
-        dot.classList.toggle('active', active);
-        dot.setAttribute('aria-checked', active ? 'true' : 'false');
-      });
-    });
   }
 
   function toggleTheme() {
@@ -221,10 +270,30 @@
       card.tabIndex = 0;
       card.setAttribute('role', 'button');
 
-      var spine = document.createElement('div');
-      spine.className = 'book-card-spine';
-      spine.style.background = book.spine || SPINE_COLORS[0];
-      card.appendChild(spine);
+      var cover = document.createElement('div');
+      cover.className = 'book-cover' + (book.cover ? '' : ' book-cover-blank');
+      if (book.cover) {
+        var img = document.createElement('img');
+        img.src = book.cover;
+        img.alt = '';
+        cover.appendChild(img);
+      } else {
+        var placeholder = document.createElement('span');
+        placeholder.className = 'book-cover-letter';
+        placeholder.textContent = (book.title || 'U').trim().charAt(0).toUpperCase();
+        cover.appendChild(placeholder);
+      }
+
+      var coverBtn = document.createElement('button');
+      coverBtn.className = 'book-cover-btn';
+      coverBtn.textContent = book.cover ? 'Change cover' : 'Add cover';
+      coverBtn.title = book.cover ? 'Replace or remove this cover' : 'Choose a cover image';
+      coverBtn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        chooseCover(book);
+      });
+      cover.appendChild(coverBtn);
+      card.appendChild(cover);
 
       var body = document.createElement('div');
       body.className = 'book-card-body';
@@ -281,6 +350,94 @@
       location.hash = '#/book/' + book.id;
     });
     bookGrid.appendChild(add);
+  }
+
+  /* ---------------- Images ----------------
+     Photos straight off a phone are several megabytes each, so everything is
+     re-encoded down to a sane size before it is stored. */
+
+  function readImageFile(file, maxW, maxH, quality) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !/^image\//.test(file.type)) { reject(new Error('not an image')); return; }
+      var reader = new FileReader();
+      reader.onerror = function () { reject(new Error('could not read the file')); };
+      reader.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error('that image could not be opened')); };
+        img.onload = function () {
+          var scale = Math.min(1, maxW / img.width, maxH / img.height);
+          var w = Math.max(1, Math.round(img.width * scale));
+          var h = Math.max(1, Math.round(img.height * scale));
+          var canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = h;
+          var ctx = canvas.getContext('2d');
+          // PNG transparency would turn black on a JPEG, so paint the page colour first.
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(img, 0, 0, w, h);
+          try {
+            resolve(canvas.toDataURL('image/jpeg', quality));
+          } catch (e) {
+            reject(new Error('that image could not be converted'));
+          }
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function pickImage() {
+    return new Promise(function (resolve) {
+      var input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.style.display = 'none';
+      document.body.appendChild(input);
+      input.addEventListener('change', function () {
+        var file = input.files && input.files[0];
+        input.remove();
+        resolve(file || null);
+      });
+      input.click();
+    });
+  }
+
+  function chooseCover(book) {
+    if (book.cover && !confirm('Replace the cover for "' + (book.title || 'this book') + '"?\n\n' +
+        'Choose Cancel to remove the current cover instead.')) {
+      delete book.cover;
+      book.updatedAt = Date.now();
+      persist();
+      renderLibrary();
+      return;
+    }
+    pickImage().then(function (file) {
+      if (!file) return;
+      return readImageFile(file, 600, 900, 0.82).then(function (dataUrl) {
+        book.cover = dataUrl;
+        book.updatedAt = Date.now();
+        persist();
+        renderLibrary();
+      });
+    }).catch(function (err) {
+      alert('Could not use that image: ' + err.message);
+    });
+  }
+
+  function insertImage() {
+    pickImage().then(function (file) {
+      if (!file) return;
+      return readImageFile(file, 1400, 1400, 0.85).then(function (dataUrl) {
+        editor.focus();
+        document.execCommand('insertHTML', false, '<img src="' + dataUrl + '" alt="">');
+        scheduleSave();
+        updateCounters();
+      });
+    }).catch(function (err) {
+      alert('Could not insert that image: ' + err.message);
+    });
   }
 
   /* ---------------- Chapter list ---------------- */
@@ -407,19 +564,32 @@
 
   /* ---------------- Saving ---------------- */
 
-  function setSaveStatus(text, saving) {
+  function setSaveStatus(text, saving, failed) {
     saveStatus.textContent = text;
     saveStatus.classList.toggle('saving', !!saving);
+    saveStatus.classList.toggle('failed', !!failed);
   }
 
   function scheduleSave() {
     dirty = true;
-    setSaveStatus('Saving…', true);
+    if (!storageFailed) setSaveStatus('Saving…', true);
     clearTimeout(saveTimer);
     saveTimer = setTimeout(flushSave, SAVE_DEBOUNCE_MS);
   }
 
+  /* Nothing in here may leave the status stuck on "Saving…" or the sidebar
+     stale, however the write itself turns out. */
   function flushSave() {
+    try {
+      commitEdits();
+    } finally {
+      renderChapterList();
+      updateCounters();
+      if (!storageFailed) setSaveStatus('Saved');
+    }
+  }
+
+  function commitEdits() {
     clearTimeout(saveTimer);
     if (!dirty) return;
     dirty = false;
@@ -444,9 +614,6 @@
     book.lastTotalWords = total;
 
     persist();
-    renderChapterList();
-    updateCounters();
-    setSaveStatus('Saved');
   }
 
   function updateCounters() {
@@ -490,6 +657,9 @@
   blockSelect.addEventListener('change', function () {
     exec('formatBlock', '<' + blockSelect.value + '>');
   });
+
+  $('#btn-image').addEventListener('mousedown', function (e) { e.preventDefault(); });
+  $('#btn-image').addEventListener('click', insertImage);
 
   $('#btn-scene-break').addEventListener('mousedown', function (e) { e.preventDefault(); });
   $('#btn-scene-break').addEventListener('click', function () {
@@ -594,10 +764,34 @@
     return html.join('');
   }
 
-  // Paste: Markdown renders as formatting; anything else becomes clean paragraphs.
+  // Paste: images come in as pictures, Markdown renders as formatting,
+  // anything else becomes clean paragraphs.
   editor.addEventListener('paste', function (e) {
+    var clip = e.clipboardData || window.clipboardData;
+
+    var imageFile = null;
+    var items = clip && clip.items;
+    for (var i = 0; items && i < items.length; i++) {
+      if (items[i].kind === 'file' && /^image\//.test(items[i].type)) {
+        imageFile = items[i].getAsFile();
+        break;
+      }
+    }
+    if (imageFile) {
+      e.preventDefault();
+      readImageFile(imageFile, 1400, 1400, 0.85).then(function (dataUrl) {
+        editor.focus();
+        document.execCommand('insertHTML', false, '<img src="' + dataUrl + '" alt="">');
+        scheduleSave();
+        updateCounters();
+      }).catch(function (err) {
+        alert('Could not paste that image: ' + err.message);
+      });
+      return;
+    }
+
     e.preventDefault();
-    var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+    var text = clip.getData('text/plain');
     if (!text) return;
     var html;
     if (looksLikeMarkdown(text)) {
@@ -681,10 +875,14 @@
     parts.push('h2.chapter{font-size:24px;margin-top:0;text-align:center}section{page-break-before:always;padding-top:15vh}');
     parts.push('p{margin:0 0 .3em;text-indent:1.6em}h2+p,hr+p{text-indent:0}');
     parts.push('hr{border:none;text-align:center;margin:1.6em 0}hr:after{content:"\\2733\\00a0\\00a0\\2733\\00a0\\00a0\\2733";color:#999;font-size:13px}');
-    parts.push('blockquote{margin:1em 1.4em;padding-left:14px;border-left:3px solid #b3502d;color:#555;font-style:italic}');
+    parts.push('blockquote{margin:1em 1.4em;padding-left:14px;border-left:3px solid #3a6a4d;color:#555;font-style:italic}');
+    parts.push('img{max-width:100%;height:auto;display:block;margin:1.2em auto;border-radius:4px}');
+    parts.push('.cover{max-width:60%;margin:0 auto 2em;display:block;border-radius:6px}');
     parts.push('@media print{section{padding-top:10vh}}');
     parts.push('</style></head><body>');
-    parts.push('<div class="title-page"><h1>' + escapeHtml(book.title || 'Untitled') + '</h1>');
+    parts.push('<div class="title-page">');
+    if (book.cover) parts.push('<img class="cover" src="' + book.cover + '" alt="">');
+    parts.push('<h1>' + escapeHtml(book.title || 'Untitled') + '</h1>');
     if (book.author) parts.push('<p>by ' + escapeHtml(book.author) + '</p>');
     parts.push('</div>');
     book.chapters.forEach(function (ch, i) {
@@ -727,6 +925,7 @@
             break;
           case 'hr': out += '* * *\n\n'; break;
           case 'br': out += '\n'; break;
+          case 'img': out += '\n![' + (child.getAttribute('alt') || 'image') + '](' + child.getAttribute('src') + ')\n\n'; break;
           default: out += inner;
         }
       });
@@ -983,6 +1182,10 @@
     navigator.serviceWorker.register('sw.js').catch(function () { /* offline install is best-effort */ });
   }
 
-  applyTheme();
-  route();
+  // Storage is asynchronous now, so the first paint waits for the library.
+  load().then(function (loaded) {
+    db = loaded;
+    applyTheme();
+    route();
+  });
 })();
