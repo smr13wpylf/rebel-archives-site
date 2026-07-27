@@ -522,19 +522,95 @@
     updateCounters();
   });
 
-  // Paste as clean paragraphs — keeps outside markup out of the manuscript.
+  /* ---- Markdown paste support ----
+     Pasted Markdown is converted to the editor's rich formatting on the
+     spot, so it lands already rendered instead of as raw #/** markup. */
+
+  function looksLikeMarkdown(text) {
+    return /(^|\n)\s{0,3}(#{1,6}\s|>\s|[-*+]\s\S|\d+[.)]\s\S)/.test(text) ||
+      /\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~/.test(text) ||
+      /(^|\n)\s*(-{3,}|_{3,}|(\*\s*){3,})\s*(\n|$)/.test(text);
+  }
+
+  function mdInline(s) {
+    var div = document.createElement('div');
+    div.textContent = s;
+    return div.innerHTML
+      .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+      .replace(/__([^_\n]+)__/g, '<b>$1</b>')
+      .replace(/~~([^~\n]+)~~/g, '<s>$1</s>')
+      .replace(/(^|[^*])\*([^*\n]+)\*(?!\*)/g, '$1<i>$2</i>')
+      .replace(/(^|[^_])_([^_\n]+)_(?!_)/g, '$1<i>$2</i>');
+  }
+
+  function markdownToHtml(text) {
+    var html = [], para = [], quote = [], listType = null, listItems = [];
+    function flushPara() {
+      if (para.length) { html.push('<p>' + mdInline(para.join(' ')) + '</p>'); para = []; }
+    }
+    function flushList() {
+      if (listItems.length) {
+        html.push('<' + listType + '>' + listItems.map(function (li) {
+          return '<li>' + mdInline(li) + '</li>';
+        }).join('') + '</' + listType + '>');
+        listItems = [];
+      }
+      listType = null;
+    }
+    function flushQuote() {
+      if (quote.length) { html.push('<blockquote>' + mdInline(quote.join(' ')) + '</blockquote>'); quote = []; }
+    }
+    function flushAll() { flushPara(); flushList(); flushQuote(); }
+
+    text.split(/\r?\n/).forEach(function (line) {
+      var t = line.trim(), m;
+      if (!t) { flushAll(); return; }
+      if (/^(-{3,}|_{3,}|(\*\s*){3,})$/.test(t)) { flushAll(); html.push('<hr>'); return; }
+      if ((m = t.match(/^(#{1,6})\s+(.*)$/))) {
+        flushAll();
+        var tag = m[1].length === 1 ? 'h1' : 'h2';
+        html.push('<' + tag + '>' + mdInline(m[2]) + '</' + tag + '>');
+        return;
+      }
+      if ((m = t.match(/^>\s?(.*)$/))) { flushPara(); flushList(); quote.push(m[1]); return; }
+      if ((m = t.match(/^[-*+]\s+(.*)$/))) {
+        flushPara(); flushQuote();
+        if (listType !== 'ul') flushList();
+        listType = 'ul';
+        listItems.push(m[1]);
+        return;
+      }
+      if ((m = t.match(/^\d+[.)]\s+(.*)$/))) {
+        flushPara(); flushQuote();
+        if (listType !== 'ol') flushList();
+        listType = 'ol';
+        listItems.push(m[1]);
+        return;
+      }
+      flushList(); flushQuote();
+      para.push(t);
+    });
+    flushAll();
+    return html.join('');
+  }
+
+  // Paste: Markdown renders as formatting; anything else becomes clean paragraphs.
   editor.addEventListener('paste', function (e) {
     e.preventDefault();
     var text = (e.clipboardData || window.clipboardData).getData('text/plain');
     if (!text) return;
-    var paragraphs = text.split(/\n{2,}/).map(function (p) {
-      return p.replace(/\n/g, ' ').trim();
-    }).filter(Boolean);
-    var html = paragraphs.map(function (p) {
-      var div = document.createElement('div');
-      div.textContent = p;
-      return '<p>' + div.innerHTML + '</p>';
-    }).join('');
+    var html;
+    if (looksLikeMarkdown(text)) {
+      html = markdownToHtml(text);
+    } else {
+      html = text.split(/\n{2,}/).map(function (p) {
+        return p.replace(/\n/g, ' ').trim();
+      }).filter(Boolean).map(function (p) {
+        var div = document.createElement('div');
+        div.textContent = p;
+        return '<p>' + div.innerHTML + '</p>';
+      }).join('');
+    }
     document.execCommand('insertHTML', false, html || '');
     scheduleSave();
     updateCounters();
