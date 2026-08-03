@@ -352,6 +352,16 @@
     bookGrid.appendChild(add);
   }
 
+  /* ---------------- Narrow-screen sidebar ---------------- */
+
+  function narrowLayout() {
+    return window.matchMedia && window.matchMedia('(max-width: 860px)').matches;
+  }
+
+  function closeSidebar() {
+    viewEditor.classList.remove('sidebar-open');
+  }
+
   /* ---------------- Images ----------------
      Photos straight off a phone are several megabytes each, so everything is
      re-encoded down to a sane size before it is stored. */
@@ -525,6 +535,9 @@
     renderChapterList();
     updateCounters();
     setSaveStatus('Saved');
+    // On a narrow screen the sidebar sits over the page: picking a chapter
+    // means you want to read it, so get out of the way.
+    if (narrowLayout()) closeSidebar();
   }
 
   function addChapter() {
@@ -838,6 +851,7 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && document.body.classList.contains('focus-mode')) setFocusMode(false);
+    else if (e.key === 'Escape' && viewEditor.classList.contains('sidebar-open')) closeSidebar();
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
       if (!viewEditor.hidden) flushSave();
@@ -1164,6 +1178,8 @@
   $('#btn-sidebar-toggle').addEventListener('click', function () {
     viewEditor.classList.toggle('sidebar-open');
   });
+  $('#btn-sidebar-close').addEventListener('click', closeSidebar);
+  $('#sidebar-scrim').addEventListener('click', closeSidebar);
   $('#btn-back').addEventListener('click', function () { location.hash = '#/'; });
   $('#btn-theme').addEventListener('click', toggleTheme);
   $('#btn-theme-lib').addEventListener('click', toggleTheme);

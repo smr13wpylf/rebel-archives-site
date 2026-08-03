@@ -36,11 +36,15 @@
 <!-- ========== EDITOR VIEW ========== -->
 <div id="view-editor" class="view" hidden>
 
+  <!-- Tap-anywhere-to-close backdrop for the narrow-screen sidebar -->
+  <div id="sidebar-scrim" class="sidebar-scrim"></div>
+
   <!-- Sidebar -->
   <aside id="sidebar" class="sidebar">
     <div class="sidebar-top">
       <button id="btn-back" class="btn btn-ghost btn-back" title="Back to library">← Library</button>
       <button id="btn-theme" class="btn btn-icon" title="Toggle light/dark theme">◐</button>
+      <button id="btn-sidebar-close" class="btn-icon btn-sidebar-close" title="Close chapters (Esc)">✕</button>
     </div>
 
     <input id="book-title-input" class="book-title-input" type="text" placeholder="Untitled book" spellcheck="false" aria-label="Book title">
