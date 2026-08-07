@@ -42,6 +42,20 @@ library. Use **Backup all** / **Import backup** to move books between them.
 - **Backup / import** — download all books as JSON and restore them on another machine
 - **Clean paste** — pasted text is converted to plain paragraphs so outside formatting never pollutes the manuscript
 
+## The Complete Shelf
+
+`shelf/` holds a companion piece: a warm, editorial 3D library built with
+Three.js. A continuous walnut shelf carries nineteen procedurally generated
+clothbound hardcovers — each with its own proportions, muted cloth colour,
+and abstract foil motif. Browse by dragging, scrolling, arrow keys, the
+prev/next buttons, or the row of position markers; click the selected book
+(or press Enter) to pull it forward and orbit, pan, and zoom around it,
+and Esc to slide it back into the row.
+
+Three.js is vendored under `shelf/vendor/three/` (MIT), so the shelf works
+offline and without any build step, same as the rest of the site. Open
+`/shelf/` directly or use **The Shelf** link in the library header.
+
 ## Where the data lives
 
 Everything is kept under the `rebelArchives.studio.v1` key in localStorage for

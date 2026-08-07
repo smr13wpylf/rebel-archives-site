@@ -1,0 +1,3 @@
+# Local agent tooling (installed via `npx skills add`), not part of the site.
+.claude/
+skills-lock.json
