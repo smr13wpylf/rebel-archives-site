@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f3ecdd">
+  <title>The Complete Shelf — Rebel Archives</title>
+  <meta name="description" content="A continuous shelf of nineteen clothbound hardcovers. Browse, then pull one forward to inspect.">
+  <link rel="stylesheet" href="./css/shelf.css">
+  <link rel="icon" href="../icons/icon-192.png">
+  <script type="importmap">
+    { "imports": { "three": "./vendor/three/three.module.min.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="stage" aria-label="Three-dimensional bookshelf. Use the arrow keys to browse, Enter to open a book, Escape to put it back."></canvas>
+
+  <div class="vignette" aria-hidden="true"></div>
+  <div class="scrim" id="scrim" aria-hidden="true"></div>
+
+  <header class="masthead">
+    <p class="wordmark">The Complete Shelf</p>
+    <p class="deck">A library of nineteen</p>
+  </header>
+
+  <a class="return-link" href="../">Writing studio</a>
+
+  <section class="book-card" id="bookCard" aria-live="polite">
+    <p class="book-no" id="bookNo"></p>
+    <h1 class="book-title" id="bookTitle"></h1>
+    <p class="book-author" id="bookAuthor"></p>
+    <p class="book-colophon" id="bookColophon"></p>
+    <p class="book-note" id="bookNote" hidden></p>
+  </section>
+
+  <div class="inspect-bar" id="inspectBar" hidden>
+    <p class="hint">Drag to orbit &nbsp;·&nbsp; Scroll to zoom &nbsp;·&nbsp; Right-drag to pan</p>
+    <button class="btn" id="closeBtn" type="button">Return to shelf <kbd>Esc</kbd></button>
+  </div>
+
+  <nav class="browse-bar" id="browseBar" aria-label="Shelf navigation">
+    <button class="btn chev" id="prevBtn" type="button" aria-label="Previous book">&#8249;</button>
+    <div class="markers" id="markers" role="group" aria-label="Jump to a book"></div>
+    <button class="btn chev" id="nextBtn" type="button" aria-label="Next book">&#8250;</button>
+    <button class="btn open" id="openBtn" type="button">Open book <kbd>&#9166;</kbd></button>
+  </nav>
+
+  <noscript><p class="noscript">The Complete Shelf needs JavaScript (and WebGL) to render.</p></noscript>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
