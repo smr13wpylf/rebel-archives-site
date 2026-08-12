@@ -383,12 +383,69 @@
     return sup;
   }
 
-  function insertNote() {
-    var text = prompt('Note text:', '');
-    if (text === null) return;
-    text = text.trim();
-    if (!text) return;
+  /* Notes get a real editing panel rather than a one-line prompt: they run
+     long, and punctuation is fiddly to fix in a box you cannot see. */
+  var noteModal = $('#note-modal');
+  var noteModalText = $('#note-modal-text');
+  var noteModalTitle = $('#note-modal-title');
+  var noteModalDelete = $('#note-modal-delete');
+  var noteSession = null;
 
+  function openNoteEditor(opts) {
+    noteSession = opts;
+    noteModalTitle.textContent = opts.title;
+    noteModalText.value = opts.text || '';
+    noteModalDelete.hidden = !opts.onDelete;
+    noteModal.hidden = false;
+    noteModalText.focus();
+    // Caret at the end, so an existing note is ready to amend, not replace.
+    var end = noteModalText.value.length;
+    noteModalText.setSelectionRange(end, end);
+  }
+
+  function closeNoteEditor() {
+    noteModal.hidden = true;
+    noteSession = null;
+    editor.focus();
+  }
+
+  function saveNoteEditor() {
+    if (!noteSession) return;
+    var text = noteModalText.value.trim();
+    var session = noteSession;
+    closeNoteEditor();
+    if (!text) {
+      if (session.onDelete) session.onDelete();
+      return;
+    }
+    session.onSave(text);
+  }
+
+  $('#note-modal-save').addEventListener('click', saveNoteEditor);
+  $('#note-modal-cancel').addEventListener('click', closeNoteEditor);
+  noteModalDelete.addEventListener('click', function () {
+    var session = noteSession;
+    closeNoteEditor();
+    if (session && session.onDelete) session.onDelete();
+  });
+  noteModal.addEventListener('mousedown', function (e) {
+    if (e.target === noteModal) closeNoteEditor(); // click the backdrop
+  });
+  noteModalText.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { e.preventDefault(); closeNoteEditor(); }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); saveNoteEditor(); }
+  });
+
+  function insertNote() {
+    if (!noteModal.hidden) return;
+    openNoteEditor({
+      title: 'New note',
+      text: '',
+      onSave: placeNote
+    });
+  }
+
+  function placeNote(text) {
     editor.focus();
     var sel = window.getSelection();
     var marker = makeMarker(text);
@@ -407,12 +464,18 @@
   }
 
   function editNote(marker) {
-    var text = prompt('Edit note (clear the box to delete it):', marker.dataset.note || '');
-    if (text === null) return;
-    text = text.trim();
-    if (!text) marker.remove();
-    else marker.dataset.note = text;
-    afterNoteChange();
+    openNoteEditor({
+      title: 'Edit note',
+      text: marker.dataset.note || '',
+      onSave: function (text) {
+        marker.dataset.note = text;
+        afterNoteChange();
+      },
+      onDelete: function () {
+        marker.remove();
+        afterNoteChange();
+      }
+    });
   }
 
   function afterNoteChange() {
@@ -1025,6 +1088,7 @@
   $('#btn-exit-focus').addEventListener('click', function () { setFocusMode(false); });
 
   document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !noteModal.hidden) { closeNoteEditor(); return; }
     if (e.key === 'Escape' && document.body.classList.contains('focus-mode')) setFocusMode(false);
     else if (e.key === 'Escape' && viewEditor.classList.contains('sidebar-open')) closeSidebar();
     if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'd') {
@@ -1145,7 +1209,7 @@
     out.push('<ol start="' + start + '">');
     notes.forEach(function (text, k) {
       var n = start + k;
-      out.push('<li id="fn-' + chapterIndex + '-' + n + '">' + escapeHtml(text) +
+      out.push('<li id="fn-' + chapterIndex + '-' + n + '">' + escapeHtml(text).replace(/\n/g, '<br>') +
         '<a class="back" href="#fnref-' + chapterIndex + '-' + n + '" title="Back to the text">↩</a></li>');
     });
     out.push('</ol></div>');
@@ -1210,7 +1274,9 @@
       out += '\n## ' + (ch.title || 'Chapter ' + (i + 1)) + '\n\n';
       out += htmlToMarkdown(split.html) + '\n';
 
-      var defs = split.notes.map(function (text, k) { return '[^' + (start + k) + ']: ' + text; });
+      var defs = split.notes.map(function (text, k) {
+        return '[^' + (start + k) + ']: ' + text.replace(/\n/g, '\n    ');
+      });
       if (!defs.length) return;
       if (placement === 'foot') out += '\n' + defs.join('\n') + '\n';
       else tail.push('### ' + (ch.title || 'Chapter ' + (i + 1)) + '\n\n' + defs.join('\n'));
@@ -1242,7 +1308,9 @@
       out += '\n\n' + (ch.title || 'Chapter ' + (i + 1)) + '\n\n';
       out += tmp.textContent.replace(/\n{3,}/g, '\n\n').trim() + '\n';
 
-      var lines = split.notes.map(function (text, k) { return '[' + (start + k) + '] ' + text; });
+      var lines = split.notes.map(function (text, k) {
+        return '[' + (start + k) + '] ' + text.replace(/\n/g, '\n    ');
+      });
       if (!lines.length) return;
       if (placement === 'foot') out += '\nNOTES\n' + lines.join('\n') + '\n';
       else tail.push((ch.title || 'Chapter ' + (i + 1)) + '\n' + lines.join('\n'));
