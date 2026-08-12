@@ -1,7 +1,7 @@
 /* Rebel Archives — offline service worker.
-   Cache-first for the app shell; bump CACHE_VERSION when files change. */
+   Network first with the cache as the offline fallback; bump CACHE_VERSION when files change. */
 
-var CACHE_VERSION = 'rebel-archives-v10';
+var CACHE_VERSION = 'rebel-archives-v12';
 
 var SHELL = [
   './',
@@ -16,7 +16,11 @@ var SHELL = [
 self.addEventListener('install', function (event) {
   event.waitUntil(
     caches.open(CACHE_VERSION).then(function (cache) {
-      return cache.addAll(SHELL);
+      // 'reload' skips the browser's HTTP cache, so an update can never
+      // install a stale copy of the files it is meant to replace.
+      return cache.addAll(SHELL.map(function (url) {
+        return new Request(url, { cache: 'reload' });
+      }));
     }).then(function () {
       return self.skipWaiting();
     })
@@ -35,31 +39,52 @@ self.addEventListener('activate', function (event) {
   );
 });
 
+/* Network first, cache as the offline fallback.
+   Serving the cache first was faster but could hand back a half-updated app:
+   the page HTML from one version and its script from the next. The app is a
+   few small files, so preferring the network keeps every load internally
+   consistent, and the cache still makes it work with no connection. */
+
+var NETWORK_TIMEOUT_MS = 4000;
+
+function fromNetwork(request) {
+  return new Promise(function (resolve, reject) {
+    var settled = false;
+    var timer = setTimeout(function () {
+      if (!settled) { settled = true; reject(new Error('network timeout')); }
+    }, NETWORK_TIMEOUT_MS);
+
+    fetch(request).then(function (res) {
+      clearTimeout(timer);
+      if (settled) return;   // too slow: the cached copy already went out
+      settled = true;
+      resolve(res);
+    }).catch(function (err) {
+      clearTimeout(timer);
+      if (!settled) { settled = true; reject(err); }
+    });
+  });
+}
+
 self.addEventListener('fetch', function (event) {
   if (event.request.method !== 'GET') return;
+  if (new URL(event.request.url).origin !== location.origin) return;
+
   event.respondWith(
-    caches.match(event.request, { ignoreSearch: true }).then(function (cached) {
-      if (cached) {
-        // Serve instantly, refresh the cache in the background when online.
-        event.waitUntil(
-          fetch(event.request).then(function (res) {
-            if (res && res.ok) {
-              return caches.open(CACHE_VERSION).then(function (cache) {
-                return cache.put(event.request, res);
-              });
-            }
-          }).catch(function () { /* offline: cached copy already served */ })
-        );
-        return cached;
+    fromNetwork(event.request).then(function (res) {
+      if (res && res.ok) {
+        var copy = res.clone();
+        event.waitUntil(caches.open(CACHE_VERSION).then(function (cache) {
+          return cache.put(event.request, copy);
+        }));
       }
-      return fetch(event.request).then(function (res) {
-        if (res && res.ok && new URL(event.request.url).origin === location.origin) {
-          var copy = res.clone();
-          event.waitUntil(caches.open(CACHE_VERSION).then(function (cache) {
-            return cache.put(event.request, copy);
-          }));
-        }
-        return res;
+      return res;
+    }).catch(function () {
+      return caches.match(event.request, { ignoreSearch: true }).then(function (cached) {
+        if (cached) return cached;
+        // An unvisited route offline still gets the app shell.
+        if (event.request.mode === 'navigate') return caches.match('./index.html');
+        return Response.error();
       });
     })
   );

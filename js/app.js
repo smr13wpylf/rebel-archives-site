@@ -1567,7 +1567,25 @@
 
   // Offline support: service workers need http(s); file:// already works offline.
   if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
-    navigator.serviceWorker.register('sw.js').catch(function () { /* offline install is best-effort */ });
+    // The cached copy is served first, so a page opened before an update shows
+    // the old version. When a newer worker takes over, pick up its files right
+    // away rather than leaving the reader on a stale build.
+    var hadController = !!navigator.serviceWorker.controller;
+    var reloading = false;
+
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (!hadController || reloading) return; // first install: nothing stale to replace
+      reloading = true;
+      try { flushSave(); } catch (e) { /* nothing open to save */ }
+      location.reload();
+    });
+
+    navigator.serviceWorker.register('sw.js').then(function (reg) {
+      reg.update();
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') reg.update();
+      });
+    }).catch(function () { /* offline install is best-effort */ });
   }
 
   // Storage is asynchronous now, so the first paint waits for the library.
