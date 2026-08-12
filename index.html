@@ -66,6 +66,13 @@
         <div id="goal-text" class="goal-text">0 / 500 words</div>
       </div>
       <div id="book-total-words" class="book-total">0 words in manuscript</div>
+      <div class="notes-setting">
+        <label class="notes-setting-label" for="note-placement">Notes</label>
+        <select id="note-placement" class="notes-select" title="Where notes appear when the book is exported">
+          <option value="foot">Foot of each chapter</option>
+          <option value="end">Back of the book</option>
+        </select>
+      </div>
       <div class="export-block">
         <div class="sidebar-section-label"><span>Export</span></div>
         <div class="export-buttons">
@@ -101,6 +108,7 @@
         <button class="tbtn" data-cmd="insertOrderedList" title="Numbered list">1≡</button>
         <button class="tbtn" id="btn-scene-break" title="Insert scene break">✳︎✳︎✳︎</button>
         <button class="tbtn" id="btn-image" title="Insert a photo or image">🖼</button>
+        <button class="tbtn" id="btn-note" title="Insert a note (Ctrl+Alt+D)">a¹</button>
       </div>
       <div class="toolbar-group">
         <button class="tbtn" data-cmd="undo" title="Undo (Ctrl+Z)">↺</button>
@@ -115,6 +123,7 @@
       <div class="page">
         <input id="chapter-title-input" class="chapter-title-input" type="text" placeholder="Chapter title" spellcheck="false" aria-label="Chapter title">
         <div id="editor" class="editor" contenteditable="true" spellcheck="true" aria-label="Chapter text"></div>
+        <div id="notes-panel" class="notes-panel" hidden></div>
       </div>
     </div>
 

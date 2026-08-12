@@ -552,6 +552,93 @@ button { font-family: inherit; }
   color: var(--ink-soft);
   font-style: italic;
 }
+/* ---------- Notes ---------- */
+.editor sup.note-ref {
+  display: inline-block;
+  min-width: 14px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 4px;
+  padding: 2px 3px;
+  margin: 0 1px;
+  cursor: pointer;
+  vertical-align: super;
+  user-select: none;
+}
+.editor sup.note-ref:hover { outline: 1px solid var(--accent); }
+
+.notes-panel {
+  margin-top: 34px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.notes-panel[hidden] { display: none; }
+.notes-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-bottom: 8px;
+}
+.note-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  margin-bottom: 5px;
+}
+.note-num {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 auto;
+  min-width: 16px;
+}
+.note-text {
+  flex: 1;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--serif);
+  font-size: 14.5px;
+  line-height: 1.5;
+  padding: 2px 4px;
+  border-radius: 5px;
+  cursor: text;
+}
+.note-text:hover { background: var(--accent-soft); color: var(--ink); }
+
+.notes-setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 4px 10px;
+}
+.notes-setting-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.notes-select {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  border-radius: 6px;
+  font-size: 12px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
 .editor img {
   max-width: 100%;
   height: auto;

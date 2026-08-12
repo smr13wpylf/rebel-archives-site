@@ -153,6 +153,7 @@
       createdAt: Date.now(),
       updatedAt: Date.now(),
       goalWords: 500,
+      notePlacement: 'foot',
       dailyProgress: {},
       lastTotalWords: 0,
       chapters: [newChapter('Chapter 1')]
@@ -205,6 +206,8 @@
   var chapterWordsEl = $('#chapter-words');
   var sessionWordsEl = $('#session-words');
   var blockSelect = $('#block-select');
+  var notesPanel = $('#notes-panel');
+  var notePlacement = $('#note-placement');
 
   /* ---------------- Theme ---------------- */
 
@@ -253,6 +256,7 @@
     viewEditor.hidden = false;
     bookTitleInput.value = book.title;
     bookAuthorInput.value = book.author || '';
+    notePlacement.value = notePlacementOf(book);
     if (!book.chapters.length) book.chapters.push(newChapter('Chapter 1'));
     selectChapter(book.chapters[0].id, true);
     renderChapterList();
@@ -351,6 +355,150 @@
     });
     bookGrid.appendChild(add);
   }
+
+  /* ---------------- Notes (footnotes / endnotes) ----------------
+     A note is a superscript marker carrying its own text, so the note can
+     never drift away from the sentence it belongs to: cut, paste, reorder
+     or delete the passage and the note goes with it. Numbers are display
+     only and get recomputed, so they are always in reading order. */
+
+  function noteMarkers(root) {
+    return Array.prototype.slice.call((root || editor).querySelectorAll('sup.note-ref'));
+  }
+
+  function renumberNotes() {
+    noteMarkers().forEach(function (el, i) {
+      var n = String(i + 1);
+      if (el.textContent !== n) el.textContent = n;
+      el.setAttribute('contenteditable', 'false');
+    });
+  }
+
+  function makeMarker(text) {
+    var sup = document.createElement('sup');
+    sup.className = 'note-ref';
+    sup.setAttribute('contenteditable', 'false');
+    sup.dataset.note = text;
+    sup.textContent = '1';
+    return sup;
+  }
+
+  function insertNote() {
+    var text = prompt('Note text:', '');
+    if (text === null) return;
+    text = text.trim();
+    if (!text) return;
+
+    editor.focus();
+    var sel = window.getSelection();
+    var marker = makeMarker(text);
+    if (sel && sel.rangeCount && editor.contains(sel.anchorNode)) {
+      var range = sel.getRangeAt(0);
+      range.collapse(false); // notes attach after the selection, like a citation
+      range.insertNode(marker);
+      range.setStartAfter(marker);
+      range.collapse(true);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } else {
+      editor.appendChild(marker);
+    }
+    afterNoteChange();
+  }
+
+  function editNote(marker) {
+    var text = prompt('Edit note (clear the box to delete it):', marker.dataset.note || '');
+    if (text === null) return;
+    text = text.trim();
+    if (!text) marker.remove();
+    else marker.dataset.note = text;
+    afterNoteChange();
+  }
+
+  function afterNoteChange() {
+    renumberNotes();
+    renderNotesPanel();
+    scheduleSave();
+    updateCounters();
+  }
+
+  /* The notes for the open chapter, shown under the page as they will read. */
+  function renderNotesPanel() {
+    var markers = noteMarkers();
+    notesPanel.innerHTML = '';
+    notesPanel.hidden = markers.length === 0;
+    if (!markers.length) return;
+
+    var heading = document.createElement('div');
+    heading.className = 'notes-panel-title';
+    heading.textContent = 'Notes';
+    notesPanel.appendChild(heading);
+
+    markers.forEach(function (marker, i) {
+      var row = document.createElement('div');
+      row.className = 'note-row';
+
+      var num = document.createElement('span');
+      num.className = 'note-num';
+      num.textContent = (i + 1) + '.';
+      row.appendChild(num);
+
+      var body = document.createElement('button');
+      body.className = 'note-text';
+      body.type = 'button';
+      body.textContent = marker.dataset.note || '';
+      body.title = 'Edit this note';
+      body.addEventListener('click', function () { editNote(marker); });
+      row.appendChild(body);
+
+      notesPanel.appendChild(row);
+    });
+  }
+
+  /* Reduce pasted markup to the small set of tags this editor uses, so a
+     round trip through the clipboard cannot inject anything unexpected. */
+  var ALLOWED_TAGS = {
+    P: 1, BR: 1, B: 1, STRONG: 1, I: 1, EM: 1, U: 1, S: 1, STRIKE: 1, DEL: 1,
+    H1: 1, H2: 1, H3: 1, BLOCKQUOTE: 1, UL: 1, OL: 1, LI: 1, HR: 1, SUP: 1, IMG: 1
+  };
+
+  function sanitizeEditorHTML(html) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    tmp.querySelectorAll('script,style,meta,link,iframe,object,embed').forEach(function (el) { el.remove(); });
+
+    Array.prototype.slice.call(tmp.querySelectorAll('*')).forEach(function (el) {
+      if (!ALLOWED_TAGS[el.tagName]) {
+        // Keep the words, drop the wrapper.
+        while (el.firstChild) el.parentNode.insertBefore(el.firstChild, el);
+        el.remove();
+        return;
+      }
+      var isNote = el.tagName === 'SUP' && el.classList.contains('note-ref');
+      var src = el.tagName === 'IMG' ? el.getAttribute('src') : null;
+      var note = isNote ? el.dataset.note : null;
+
+      Array.prototype.slice.call(el.attributes).forEach(function (attr) {
+        el.removeAttribute(attr.name);
+      });
+      if (isNote) {
+        el.className = 'note-ref';
+        el.setAttribute('contenteditable', 'false');
+        el.dataset.note = note || '';
+      }
+      if (src && /^data:image\//.test(src)) el.setAttribute('src', src);
+      else if (el.tagName === 'IMG') el.remove();
+    });
+    return tmp.innerHTML;
+  }
+
+  editor.addEventListener('click', function (e) {
+    var marker = e.target.closest && e.target.closest('sup.note-ref');
+    if (marker) {
+      e.preventDefault();
+      editNote(marker);
+    }
+  });
 
   /* ---------------- Narrow-screen sidebar ---------------- */
 
@@ -532,6 +680,8 @@
     currentChapterId = id;
     chapterTitleInput.value = ch.title;
     editor.innerHTML = ch.content || '';
+    renumberNotes();
+    renderNotesPanel();
     renderChapterList();
     updateCounters();
     setSaveStatus('Saved');
@@ -605,6 +755,7 @@
   function commitEdits() {
     clearTimeout(saveTimer);
     if (!dirty) return;
+    renumberNotes();
     dirty = false;
     var book = getBook(currentBookId);
     if (!book) return;
@@ -669,6 +820,17 @@
 
   blockSelect.addEventListener('change', function () {
     exec('formatBlock', '<' + blockSelect.value + '>');
+  });
+
+  $('#btn-note').addEventListener('mousedown', function (e) { e.preventDefault(); });
+  $('#btn-note').addEventListener('click', insertNote);
+
+  notePlacement.addEventListener('change', function () {
+    var book = getBook(currentBookId);
+    if (!book) return;
+    book.notePlacement = notePlacement.value;
+    book.updatedAt = Date.now();
+    persist();
   });
 
   $('#btn-image').addEventListener('mousedown', function (e) { e.preventDefault(); });
@@ -804,6 +966,19 @@
     }
 
     e.preventDefault();
+
+    // Moving a passage inside the book must carry its notes along, so keep
+    // the markup in that one case (stripped back to what the editor uses).
+    var asHtml = clip.getData && clip.getData('text/html');
+    if (asHtml && /class="note-ref"|class='note-ref'/.test(asHtml)) {
+      document.execCommand('insertHTML', false, sanitizeEditorHTML(asHtml));
+      renumberNotes();
+      renderNotesPanel();
+      scheduleSave();
+      updateCounters();
+      return;
+    }
+
     var text = clip.getData('text/plain');
     if (!text) return;
     var html;
@@ -852,6 +1027,11 @@
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && document.body.classList.contains('focus-mode')) setFocusMode(false);
     else if (e.key === 'Escape' && viewEditor.classList.contains('sidebar-open')) closeSidebar();
+    if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === 'd') {
+      e.preventDefault();
+      if (!viewEditor.hidden) insertNote();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
       if (!viewEditor.hidden) flushSave();
@@ -881,7 +1061,26 @@
     return div.innerHTML;
   }
 
+  /* Pull the notes out of a chapter, swapping each marker for whatever the
+     target format uses to reference it. */
+  function splitNotes(chapterHtml, startNum, markerFor) {
+    var tmp = document.createElement('div');
+    tmp.innerHTML = chapterHtml || '';
+    var notes = [];
+    noteMarkers(tmp).forEach(function (el) {
+      var n = startNum + notes.length;
+      notes.push(el.dataset.note || '');
+      el.outerHTML = markerFor(n);
+    });
+    return { html: tmp.innerHTML, notes: notes };
+  }
+
+  function notePlacementOf(book) {
+    return book.notePlacement === 'end' ? 'end' : 'foot';
+  }
+
   function compileBookHTML(book) {
+    var placement = notePlacementOf(book);
     var parts = [];
     parts.push('<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + escapeHtml(book.title) + '</title><style>');
     parts.push('body{font-family:"Iowan Old Style",Palatino,Georgia,serif;max-width:640px;margin:0 auto;padding:48px 24px;color:#222;line-height:1.7;font-size:18px}');
@@ -892,20 +1091,65 @@
     parts.push('blockquote{margin:1em 1.4em;padding-left:14px;border-left:3px solid #3a6a4d;color:#555;font-style:italic}');
     parts.push('img{max-width:100%;height:auto;display:block;margin:1.2em auto;border-radius:4px}');
     parts.push('.cover{max-width:60%;margin:0 auto 2em;display:block;border-radius:6px}');
-    parts.push('@media print{section{padding-top:10vh}}');
+    parts.push('sup.fn a{text-decoration:none;color:#3a6a4d;font-size:.7em;padding:0 1px}');
+    parts.push('.notes{margin-top:2.5em;padding-top:1em;border-top:1px solid #ccc;font-size:.82em;line-height:1.5;color:#444}');
+    parts.push('.notes h3{font-size:1em;letter-spacing:.08em;text-transform:uppercase;color:#777;margin:0 0 .6em}');
+    parts.push('.notes ol{margin:0;padding-left:1.4em}.notes li{margin-bottom:.35em}.notes li p{text-indent:0;margin:0}');
+    parts.push('.notes a.back{text-decoration:none;color:#3a6a4d;margin-left:.3em}');
+    parts.push('.endnotes h3{font-size:1em;margin:1.4em 0 .5em;text-align:left;color:#555}');
+    parts.push('@media print{section{padding-top:10vh}.notes{page-break-inside:avoid}}');
     parts.push('</style></head><body>');
     parts.push('<div class="title-page">');
     if (book.cover) parts.push('<img class="cover" src="' + book.cover + '" alt="">');
     parts.push('<h1>' + escapeHtml(book.title || 'Untitled') + '</h1>');
     if (book.author) parts.push('<p>by ' + escapeHtml(book.author) + '</p>');
     parts.push('</div>');
+    // Endnotes run in one sequence through the book; footnotes restart in
+    // each chapter, as they do in print.
+    var running = 1;
+    var collected = [];
+
     book.chapters.forEach(function (ch, i) {
+      var start = placement === 'end' ? running : 1;
+      var split = splitNotes(ch.content, start, function (n) {
+        return '<sup class="fn"><a id="fnref-' + i + '-' + n + '" href="#fn-' + i + '-' + n + '">' + n + '</a></sup>';
+      });
+      running += split.notes.length;
+
       parts.push('<section><h2 class="chapter">' + escapeHtml(ch.title || 'Chapter ' + (i + 1)) + '</h2>');
-      parts.push(ch.content || '');
+      parts.push(split.html);
+      if (placement === 'foot' && split.notes.length) {
+        parts.push(notesListHTML(split.notes, i, 1, true));
+      }
       parts.push('</section>');
+      collected.push({ title: ch.title || 'Chapter ' + (i + 1), notes: split.notes, start: start, index: i });
     });
+
+    if (placement === 'end' && collected.some(function (c) { return c.notes.length; })) {
+      parts.push('<section class="endnotes"><h2 class="chapter">Notes</h2>');
+      collected.forEach(function (c) {
+        if (!c.notes.length) return;
+        parts.push('<h3>' + escapeHtml(c.title) + '</h3>');
+        parts.push(notesListHTML(c.notes, c.index, c.start, false));
+      });
+      parts.push('</section>');
+    }
+
     parts.push('</body></html>');
     return parts.join('\n');
+  }
+
+  function notesListHTML(notes, chapterIndex, start, withHeading) {
+    var out = ['<div class="notes">'];
+    if (withHeading) out.push('<h3>Notes</h3>');
+    out.push('<ol start="' + start + '">');
+    notes.forEach(function (text, k) {
+      var n = start + k;
+      out.push('<li id="fn-' + chapterIndex + '-' + n + '">' + escapeHtml(text) +
+        '<a class="back" href="#fnref-' + chapterIndex + '-' + n + '" title="Back to the text">↩</a></li>');
+    });
+    out.push('</ol></div>');
+    return out.join('');
   }
 
   function htmlToMarkdown(html) {
@@ -949,28 +1193,62 @@
   }
 
   function compileBookMarkdown(book) {
+    var placement = notePlacementOf(book);
     var out = '# ' + (book.title || 'Untitled') + '\n\n';
     if (book.author) out += 'by ' + book.author + '\n\n';
+
+    // Markdown footnote labels have to be unique across the whole file, so
+    // these stay in one sequence whichever way they are placed.
+    var running = 1;
+    var tail = [];
+
     book.chapters.forEach(function (ch, i) {
+      var split = splitNotes(ch.content, running, function (n) { return '[^' + n + ']'; });
+      var start = running;
+      running += split.notes.length;
+
       out += '\n## ' + (ch.title || 'Chapter ' + (i + 1)) + '\n\n';
-      out += htmlToMarkdown(ch.content) + '\n';
+      out += htmlToMarkdown(split.html) + '\n';
+
+      var defs = split.notes.map(function (text, k) { return '[^' + (start + k) + ']: ' + text; });
+      if (!defs.length) return;
+      if (placement === 'foot') out += '\n' + defs.join('\n') + '\n';
+      else tail.push('### ' + (ch.title || 'Chapter ' + (i + 1)) + '\n\n' + defs.join('\n'));
     });
+
+    if (tail.length) out += '\n## Notes\n\n' + tail.join('\n\n') + '\n';
     return out;
   }
 
   function compileBookText(book) {
+    var placement = notePlacementOf(book);
     var out = (book.title || 'Untitled').toUpperCase() + '\n';
     if (book.author) out += 'by ' + book.author + '\n';
     out += '\n';
+
+    var running = 1;
+    var tail = [];
+
     book.chapters.forEach(function (ch, i) {
+      var split = splitNotes(ch.content, running, function (n) { return '[' + n + ']'; });
+      var start = running;
+      running += split.notes.length;
+
       var tmp = document.createElement('div');
-      tmp.innerHTML = ch.content || '';
+      tmp.innerHTML = split.html;
       tmp.querySelectorAll('p,h1,h2,h3,blockquote,li,hr').forEach(function (el) {
         el.insertAdjacentText('beforeend', '\n\n');
       });
       out += '\n\n' + (ch.title || 'Chapter ' + (i + 1)) + '\n\n';
       out += tmp.textContent.replace(/\n{3,}/g, '\n\n').trim() + '\n';
+
+      var lines = split.notes.map(function (text, k) { return '[' + (start + k) + '] ' + text; });
+      if (!lines.length) return;
+      if (placement === 'foot') out += '\nNOTES\n' + lines.join('\n') + '\n';
+      else tail.push((ch.title || 'Chapter ' + (i + 1)) + '\n' + lines.join('\n'));
     });
+
+    if (tail.length) out += '\n\nNOTES\n\n' + tail.join('\n\n') + '\n';
     return out;
   }
 
@@ -1043,6 +1321,8 @@
       createdAt: Number(raw.createdAt) || Date.now(),
       updatedAt: Number(raw.updatedAt) || Date.now(),
       goalWords: Number(raw.goalWords) > 0 ? Number(raw.goalWords) : 500,
+      notePlacement: raw.notePlacement === 'end' ? 'end' : 'foot',
+      cover: typeof raw.cover === 'string' ? raw.cover : undefined,
       dailyProgress: (raw.dailyProgress && typeof raw.dailyProgress === 'object') ? raw.dailyProgress : {},
       lastTotalWords: 0,
       chapters: chapters
