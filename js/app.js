@@ -208,6 +208,7 @@
   var blockSelect = $('#block-select');
   var notesPanel = $('#notes-panel');
   var notePlacement = $('#note-placement');
+  var librarySearch = $('#library-search');
 
   /* ---------------- Theme ---------------- */
 
@@ -246,6 +247,8 @@
     $('#btn-exit-focus').hidden = true;
     viewEditor.hidden = true;
     viewLibrary.hidden = false;
+    // Always come back to the whole shelf; the book just edited is now first.
+    librarySearch.value = '';
     renderLibrary();
   }
 
@@ -267,8 +270,35 @@
 
   function renderLibrary() {
     bookGrid.innerHTML = '';
+    var stale = document.querySelector('.library-empty');
+    if (stale) stale.remove();
 
-    db.books.forEach(function (book) {
+    // Start a new book without hunting for the end of the shelf.
+    var add = document.createElement('button');
+    add.className = 'book-card book-card-new';
+    add.innerHTML = '<span class="plus">＋</span><span>New book</span>';
+    add.addEventListener('click', function () {
+      var book = newBook();
+      location.hash = '#/book/' + book.id;
+    });
+    bookGrid.appendChild(add);
+
+    var query = (librarySearch.value || '').trim().toLowerCase();
+    var shelf = db.books.filter(function (book) {
+      if (!query) return true;
+      return ((book.title || '') + ' ' + (book.author || '')).toLowerCase().indexOf(query) !== -1;
+    }).sort(function (a, b) {
+      return (b.updatedAt || 0) - (a.updatedAt || 0); // most recently worked on first
+    });
+
+    if (query && !shelf.length) {
+      var empty = document.createElement('p');
+      empty.className = 'library-empty';
+      empty.textContent = 'No books match “' + query + '”.';
+      bookGrid.parentNode.appendChild(empty);
+    }
+
+    shelf.forEach(function (book) {
       var card = document.createElement('div');
       card.className = 'book-card';
       card.tabIndex = 0;
@@ -345,15 +375,6 @@
 
       bookGrid.appendChild(card);
     });
-
-    var add = document.createElement('button');
-    add.className = 'book-card book-card-new';
-    add.innerHTML = '<span class="plus">＋</span><span>New book</span>';
-    add.addEventListener('click', function () {
-      var book = newBook();
-      location.hash = '#/book/' + book.id;
-    });
-    bookGrid.appendChild(add);
   }
 
   /* ---------------- Notes (footnotes / endnotes) ----------------
@@ -1362,6 +1383,9 @@
   $('#btn-backup').addEventListener('click', function () {
     download('rebel-archives-backup-' + todayKey() + '.json', 'application/json', JSON.stringify(db, null, 2));
   });
+
+  librarySearch.addEventListener('input', renderLibrary);
+  librarySearch.addEventListener('search', renderLibrary); // native clear button
 
   $('#btn-import').addEventListener('click', function () { $('#import-file').click(); });
 
