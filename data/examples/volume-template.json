@@ -1,0 +1,49 @@
+{
+  "_instructions": "Reference only — this file is never loaded by the catalog. The easiest way to add a book is `node tools/add-book.mjs`, which asks these same questions interactively. If you'd rather prepare a draft by hand and run `node tools/add-book.mjs --from your-draft.json`, copy this file, fill it in, delete every key starting with an underscore, and add two extra (tool-only) keys: `_coverPath` and `_ebookPaths` (an array) pointing at files on your computer — the tool copies them into place and strips those keys before saving the record.",
+
+  "slug": "your-permanent-slug-here",
+  "_slug": "(required) Lowercase letters, numbers, hyphens. Permanent — never change it once it's live. Must match this file's name.",
+
+  "title": "",
+  "_title": "(required)",
+  "subtitle": null,
+
+  "roles": [
+    { "role": "written-by", "name": "Shayly McDonnell" }
+  ],
+  "_roles": "(required, at least one) Allowed: written-by, compiled-by, archived-by, edited-by, researched-by, transcribed-by, subject, original-author. Never credit someone with writing what they didn't write.",
+
+  "archiveType": null,
+  "_archiveType": "One of data/taxonomies.json → archiveTypes.",
+  "collection": null,
+  "_collection": "One of data/taxonomies.json → collections.",
+
+  "description": "",
+  "_description": "(required) The public summary a visitor reads before buying.",
+  "statement": null,
+  "_statement": "Longer back-cover-style copy, optional.",
+
+  "period": { "label": null, "start": null, "end": null },
+  "created": null,
+  "sources": null,
+  "accessNotes": null,
+  "assetCredits": null,
+  "searchTerms": [],
+
+  "formats": ["pdf", "epub"],
+  "_formats": "(required, at least one) Allowed: pdf, epub, mobi, other.",
+  "price": null,
+  "_price": "Display only, e.g. \"$14\" — not charged by anything here.",
+
+  "state": "hidden-draft",
+  "_state": "One of: public, portfolio-preview, private, forthcoming, active-research, archived, hidden-draft. Validation refuses \"public\" without a live purchase link.",
+
+  "purchase": { "kind": "none", "href": null, "label": "Purchase" },
+  "_purchase": "kind: \"none\" until the product is live on your store, then \"external\" with href = the product's https:// URL. Update later with: node tools/add-book.mjs --set-purchase-link <slug> <url> [label]",
+
+  "cover": null,
+  "_coverPath": "/path/on/your/computer/to/cover.jpg",
+  "_ebookPaths": ["/path/on/your/computer/to/book.pdf", "/path/on/your/computer/to/book.epub"],
+
+  "credits": null
+}

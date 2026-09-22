@@ -1,0 +1,16 @@
+{
+  "note": "Editable vocabularies. Add a new collection or archive type here and it becomes valid everywhere (the validator and, later, the display) with no code changes. Roles, publication states, and file formats are intentionally NOT editable here — roles/states affect attribution accuracy and public visibility, and formats are a small fixed technical set; all three are fixed in tools/lib/schema.mjs.",
+  "collections": [
+    "Rebel Archives"
+  ],
+  "archiveTypes": [
+    "book",
+    "essay-collection",
+    "transcript-collection",
+    "research-volume",
+    "case-study",
+    "anthology",
+    "lecture",
+    "dossier"
+  ]
+}

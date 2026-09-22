@@ -1,7 +1,7 @@
 /* Rebel Archives — offline service worker.
    Cache-first for the app shell; bump CACHE_VERSION when files change. */
 
-var CACHE_VERSION = 'rebel-archives-v8';
+var CACHE_VERSION = 'rebel-archives-v9';
 
 var SHELL = [
   './',
@@ -10,21 +10,7 @@ var SHELL = [
   './js/app.js',
   './manifest.webmanifest',
   './icons/icon-192.png',
-  './icons/icon-512.png',
-  './shelf/',
-  './shelf/index.html',
-  './shelf/css/shelf.css',
-  './shelf/js/main.js',
-  './shelf/js/catalog.js',
-  './shelf/js/book-factory.js',
-  './shelf/js/assets.js',
-  './shelf/js/environment.js',
-  './shelf/js/interactions.js',
-  './shelf/js/ui.js',
-  './shelf/vendor/three/three.module.min.js',
-  './shelf/vendor/three/three.core.min.js',
-  './shelf/vendor/three/OrbitControls.js',
-  './shelf/vendor/three/RoundedBoxGeometry.js'
+  './icons/icon-512.png'
 ];
 
 self.addEventListener('install', function (event) {

@@ -42,19 +42,14 @@ library. Use **Backup all** / **Import backup** to move books between them.
 - **Backup / import** — download all books as JSON and restore them on another machine
 - **Clean paste** — pasted text is converted to plain paragraphs so outside formatting never pollutes the manuscript
 
-## The Complete Shelf
+## Rebel Archives ebook library (in progress)
 
-`shelf/` holds a companion piece: a warm, editorial 3D library built with
-Three.js. A continuous walnut shelf carries nineteen procedurally generated
-clothbound hardcovers — each with its own proportions, muted cloth colour,
-and abstract foil motif. Browse by dragging, scrolling, arrow keys, the
-prev/next buttons, or the row of position markers; click the selected book
-(or press Enter) to pull it forward and orbit, pan, and zoom around it,
-and Esc to slide it back into the row.
-
-Three.js is vendored under `shelf/vendor/three/` (MIT), so the shelf works
-offline and without any build step, same as the rest of the site. Open
-`/shelf/` directly or use **The Shelf** link in the library header.
+`data/volumes/` is the start of a second, separate catalog: real Rebel
+Archives ebooks, sold through a third-party store (the actual files are
+never committed here — nothing on GitHub Pages can be access-controlled).
+Add a title with `node tools/add-book.mjs`; see **ADDING-A-BOOK.md**. A
+public-facing shelf/browsing display for this catalog hasn't been built
+yet — right now this is just the data layer and intake tool.
 
 ## Where the data lives
 

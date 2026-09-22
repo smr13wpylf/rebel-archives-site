@@ -1,3 +1,9 @@
 # Local agent tooling (installed via `npx skills add`), not part of the site.
 .claude/
 skills-lock.json
+
+# Real ebook files staged for upload to a third-party store. NEVER commit
+# these: this site is static GitHub Pages with no access control, so
+# anything here would be effectively public regardless of any paywall UI.
+# See ADDING-A-BOOK.md.
+private/
