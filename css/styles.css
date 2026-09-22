@@ -296,10 +296,12 @@ button { font-family: inherit; }
   justify-content: space-between;
   align-items: center;
   margin-bottom: 10px;
+  flex: 0 0 auto;
 }
 .btn-back { padding-left: 2px; font-size: 13px; }
 
 .book-title-input {
+  flex: 0 0 auto;
   width: 100%;
   border: none;
   background: transparent;
@@ -313,6 +315,7 @@ button { font-family: inherit; }
 }
 .book-title-input:focus { background: var(--paper); }
 .book-author-input {
+  flex: 0 0 auto;
   width: 100%;
   border: none;
   background: transparent;
@@ -325,6 +328,7 @@ button { font-family: inherit; }
 .book-author-input:focus { background: var(--paper); }
 
 .sidebar-section-label {
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -340,7 +344,13 @@ button { font-family: inherit; }
   display: flex;
   flex-direction: column;
   gap: 2px;
+  /* Own the leftover height and scroll inside it. Without this the list is
+     squeezed by the blocks below and its rows spill over them. */
+  flex: 1 1 auto;
   min-height: 60px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 .chapter-item {
   display: flex;
@@ -394,7 +404,7 @@ button { font-family: inherit; }
 .chapter-item:hover .chapter-delete { opacity: 1; }
 .chapter-delete:hover { color: #c0392b; }
 
-.sidebar-bottom { margin-top: auto; padding-top: 16px; }
+.sidebar-bottom { flex: 0 0 auto; padding-top: 16px; }
 
 .goal-block {
   background: var(--paper);

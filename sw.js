@@ -1,7 +1,7 @@
 /* Rebel Archives — offline service worker.
    Network first with the cache as the offline fallback; bump CACHE_VERSION when files change. */
 
-var CACHE_VERSION = 'rebel-archives-v12';
+var CACHE_VERSION = 'rebel-archives-v13';
 
 var SHELL = [
   './',
